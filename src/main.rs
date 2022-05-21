@@ -24,6 +24,9 @@ pub struct PIDController {
     /// use DerivativeMeasurement::ErrorRateOfChange to keep derivative kick
     pub derivative_measurement: DerivativeMeasurement,
     pub derivative_initialized: bool,
+
+    pub output_min: f32,
+    pub output_max: f32,
 }
 
 impl PIDController {
@@ -37,10 +40,12 @@ impl PIDController {
 
             error_last: 0.0,
             value_last: 0.0,
-            
 
             derivative_measurement: DerivativeMeasurement::Velocity,
             derivative_initialized: false,
+
+            output_min: 0.0,
+            output_max: 0.0,
         }
     }
 
@@ -86,7 +91,15 @@ impl PIDController {
             let i = self.integral_gain * self.integration_stored;
         //<
 
-        p + i + d
+        let mut result = p + i + d;
+
+        if result > self.output_max {
+            result = self.output_max;
+        } else if result < self.output_min {
+            result = self.output_min;
+        }
+
+        result
     }
 
     /// Should be called if the system has been moved by external means, such as teleportation,
@@ -164,6 +177,8 @@ fn main() {
     pidc.derivative_gain = 1.0;
     pidc.integral_gain = 0.0000005;
     pidc.integration_saturation = 20000.0;
+    pidc.output_max = f32::MAX;
+    pidc.output_min = 0.0;
 
     // run sim
     loop {
