@@ -3,26 +3,79 @@ use std::thread::{self, current};
 
 use colored::Colorize;
 
+#[derive(PartialEq)]
+pub enum DerivativeMeasurement {
+    Velocity,
+    ErrorRateOfChange,
+}
+
 pub struct PIDController {
-    pub proportianalGain: f32,
-    pub integralGain: f32,
-    pub derivativeGain: f32,
+    pub proportianal_gain: f32,
+    pub integral_gain: f32,
+    pub derivative_gain: f32,
+
+    pub error_last: f32,
+    pub value_last: f32,
+
+    /// use DerivativeMeasurement::Velocity to avoid derivative kick
+    /// use DerivativeMeasurement::ErrorRateOfChange to keep derivative kick
+    pub derivative_measurement: DerivativeMeasurement,
+    pub derivative_initialized: bool,
 }
 
 impl PIDController {
     fn new() -> Self {
         PIDController {
-            proportianalGain: 0.0,
-            integralGain: 0.0,
-            derivativeGain: 0.0,
+            proportianal_gain: 0.0,
+            integral_gain: 0.0,
+            derivative_gain: 0.0,
+            error_last: 0.0,
+
+            value_last: 0.0,
+
+            derivative_measurement: DerivativeMeasurement::Velocity,
+            derivative_initialized: false,
         }
     }
-    fn update(&self, dt: f32, current_value: f32, target_value: f32) -> f32 {
+
+    fn update(&mut self, dt: f32, current_value: f32, target_value: f32) -> f32 {
         let error = target_value - current_value;
 
-        let p = self.proportianalGain * error;
+        //> calculate p term
+            let p = self.proportianal_gain * error;
 
-        p
+        //<> calculate D term
+            let error_rate_of_change = (error - self.error_last) / dt;
+            self.error_last = error;
+
+            let value_rate_of_change = (current_value - self.value_last) / dt;
+            self.value_last = current_value;
+
+            let mut d = 0.0;
+            // skip calculating dterm if first itertion
+            if self.derivative_initialized {
+                // choose d term to use
+                let derivative_measure =
+                    if self.derivative_measurement == DerivativeMeasurement::Velocity {
+                        -value_rate_of_change
+                    } else {
+                        error_rate_of_change
+                    };
+
+                d = self.derivative_gain * derivative_measure;
+            } else {
+                self.derivative_initialized = true;
+            }
+
+        //<
+
+        p + d
+    }
+
+    /// Should be called if the system has been moved by external means, such as teleportation,
+    /// or if the PID controller has been turned off for a long period of time.
+    fn reset(&mut self) {
+        self.derivative_initialized = false;
     }
 }
 
@@ -83,32 +136,18 @@ impl ControlledBox {
 }
 
 fn main() {
-    //>  sample display
-        // for x in 0..10000{
-        //     let x = x as f32 / 100.0;
-
-        //     ControlledBox.pos = x;
-        //     ControlledBox.display_position();
-
-        //     //<> sleep
-        //         let ten_millis = time::Duration::from_millis(5);
-        //         thread::sleep(ten_millis);
-        //     //<
-        //     print!("\r")
-        // }
-    //<
-
     // setup box
     let mut cbox = ControlledBox::new();
     cbox.pos = 10.0;
 
     // setup PIDController
     let mut pidc = PIDController::new();
-    pidc.proportianalGain = 0.001;
+    pidc.proportianal_gain = 0.001;
+    pidc.derivative_gain = 1.0;
 
     // run sim
     loop {
-        let timestep = 10;
+        let timestep = 20;
         cbox.display_position();
         let input = pidc.update(timestep as f32, cbox.pos, 50.0);
         cbox.add_force(input);
@@ -120,4 +159,7 @@ fn main() {
         //<
         print!("\r");
     }
+
+    // let mut rng = thread_rng();
+    // let node_id = rng.gen_range(0..u128::MAX);
 }
