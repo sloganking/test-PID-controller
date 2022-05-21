@@ -1,5 +1,5 @@
 use core::time;
-use std::thread::{self, current};
+use std::thread::{self};
 
 use colored::Colorize;
 use rand::{thread_rng, Rng};
@@ -105,7 +105,7 @@ impl PIDController {
 
     /// Should be called if the system has been moved by external means, such as teleportation,
     /// or if the PID controller has been turned off for a long period of time.
-    fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.derivative_initialized = false;
     }
 }
@@ -116,7 +116,6 @@ struct ControlledBox {
 }
 
 fn brightness_from_distance_to(cur: f32, target: f32, max_pixel_disance: f32) -> u8 {
-
     let distance = (cur as f32 - target).abs();
 
     if distance > max_pixel_disance {
@@ -135,44 +134,30 @@ impl ControlledBox {
     }
 
     fn display_position(&self, target: f32) {
-        //> gradiantless
-            // for x in 0..100{
-            //     if (x as f32 - self.pos).abs() <= 0.5{
-            //         print!("{}", "█".truecolor(255, 255, 255));
-            //     } else {
-            //         print!("{}", "█".truecolor(0, 0, 0));
-            //     }
-            // }
+        for x in 0..=100 {
+            // let distance = (x as f32 - self.pos).abs();
+            let max_pixel_disance = 1.0;
+            let mut pixel = [0, 0, 0];
 
-        //<> color gradiant
-            for x in 0..100 {
-                // let distance = (x as f32 - self.pos).abs();
-                let max_pixel_disance = 1.0;
-                let mut pixel = [0,0,0];
+            //>  red target
+                let brightness = brightness_from_distance_to(x as f32, target, max_pixel_disance);
+                if brightness > 0 {
+                    pixel = [brightness, 0, 0];
+                }
 
-                //>  red target
-                    let brightness = brightness_from_distance_to(x as f32, target, max_pixel_disance);
-                    if brightness > 0{
-                        pixel = [brightness, 0, 0];
+            //<> white box
+                if pixel == [0, 0, 0] {
+                    let brightness = brightness_from_distance_to(x as f32, self.pos, max_pixel_disance);
+                    if brightness > 0 {
+                        pixel = [brightness, brightness, brightness];
                     }
-                    
+                }
 
-                //<> white box
-                    if pixel == [0,0,0]{
-                        let brightness = brightness_from_distance_to(x as f32, self.pos, max_pixel_disance);
-                        if brightness > 0{
-                            pixel = [brightness, brightness, brightness];
-                        }
-                    }
-                    
-                //<
+            //<
 
-                // print pixel
-                print!("{}", "█".truecolor(pixel[0], pixel[1], pixel[2]));
-            }
-        //<
-
-        // println!();
+            // print pixel
+            print!("{}", "█".truecolor(pixel[0], pixel[1], pixel[2]));
+        }
     }
 
     fn add_force(&mut self, force: f32) {
@@ -192,49 +177,42 @@ impl ControlledBox {
 }
 
 fn main() {
-    // setup box
-    let mut cbox = ControlledBox::new();
-    cbox.pos = 10.0;
+    //> setup box
+        let mut cbox = ControlledBox::new();
+        cbox.pos = 10.0;
 
-    // setup PIDController
-    let mut pidc = PIDController::new();
-    pidc.proportianal_gain = 0.001;
-    pidc.derivative_gain = 1.0;
-    // pidc.integral_gain = 0.0000005;
-    pidc.integration_saturation = 20000.0;
-    pidc.output_max = f32::MAX;
-    pidc.output_min = f32::MIN;
+    //<> setup PIDController
+        let mut pidc = PIDController::new();
+        pidc.proportianal_gain = 0.001;
+        pidc.derivative_gain = 1.0;
+        // pidc.integral_gain = 0.0000005;
+        pidc.integration_saturation = 20000.0;
+        pidc.output_max = f32::MAX;
+        pidc.output_min = f32::MIN;
 
-    //> run sim
+    //<> run sim
         let mut rng = thread_rng();
         let mut target: f32 = rng.gen_range(0.0..100.0);
         let mut count = 0;
         let timestep = 20;
-        
-        loop {
 
+        loop {
             if count > 100 {
                 count = 0;
                 target = rng.gen_range(0.0..100.0);
             }
-            
-            // let target = 50.0;
-            
+
             cbox.display_position(target);
             let input = pidc.update(timestep as f32, cbox.pos, target);
-            cbox.add_force(input );
+            cbox.add_force(input);
             cbox.update();
 
             //> sleep
                 let ten_millis = time::Duration::from_millis(timestep);
                 thread::sleep(ten_millis);
             //<
-            // print!("\r");
             println!();
             count += 1;
         }
     //<
-
-    
-    
 }
