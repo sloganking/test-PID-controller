@@ -14,6 +14,9 @@ pub struct PIDController {
     pub integral_gain: f32,
     pub derivative_gain: f32,
 
+    pub integration_stored: f32,
+    pub integration_saturation: f32,
+
     pub error_last: f32,
     pub value_last: f32,
 
@@ -29,9 +32,12 @@ impl PIDController {
             proportianal_gain: 0.0,
             integral_gain: 0.0,
             derivative_gain: 0.0,
-            error_last: 0.0,
+            integration_stored: 0.0,
+            integration_saturation: 0.0,
 
+            error_last: 0.0,
             value_last: 0.0,
+            
 
             derivative_measurement: DerivativeMeasurement::Velocity,
             derivative_initialized: false,
@@ -67,9 +73,20 @@ impl PIDController {
                 self.derivative_initialized = true;
             }
 
+        //<> calculate I term
+            self.integration_stored = self.integration_stored + (error * dt);
+
+            // limit integration_stored
+            if self.integration_stored > self.integration_saturation {
+                self.integration_stored = self.integration_saturation;
+            } else if self.integration_stored < -self.integration_saturation {
+                self.integration_stored = -self.integration_saturation;
+            }
+
+            let i = self.integral_gain * self.integration_stored;
         //<
 
-        p + d
+        p + i + d
     }
 
     /// Should be called if the system has been moved by external means, such as teleportation,
@@ -121,7 +138,8 @@ impl ControlledBox {
     }
 
     fn add_force(&mut self, force: f32) {
-        self.speed += force;
+        let gravity = -0.01;
+        self.speed += force + gravity;
     }
 
     fn update(&mut self) {
@@ -144,6 +162,8 @@ fn main() {
     let mut pidc = PIDController::new();
     pidc.proportianal_gain = 0.001;
     pidc.derivative_gain = 1.0;
+    pidc.integral_gain = 0.0000005;
+    pidc.integration_saturation = 20000.0;
 
     // run sim
     loop {
