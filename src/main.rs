@@ -2,6 +2,7 @@ use core::time;
 use std::thread::{self, current};
 
 use colored::Colorize;
+use rand::{thread_rng, Rng};
 
 #[derive(PartialEq)]
 pub enum DerivativeMeasurement {
@@ -114,6 +115,17 @@ struct ControlledBox {
     speed: f32,
 }
 
+fn brightness_from_distance_to(cur: f32, target: f32, max_pixel_disance: f32) -> u8 {
+
+    let distance = (cur as f32 - target).abs();
+
+    if distance > max_pixel_disance {
+        0
+    } else {
+        ((max_pixel_disance - (distance / max_pixel_disance)) * 255.0) as u8
+    }
+}
+
 impl ControlledBox {
     fn new() -> Self {
         ControlledBox {
@@ -122,7 +134,7 @@ impl ControlledBox {
         }
     }
 
-    fn display_position(&self) {
+    fn display_position(&self, target: f32) {
         //> gradiantless
             // for x in 0..100{
             //     if (x as f32 - self.pos).abs() <= 0.5{
@@ -134,16 +146,29 @@ impl ControlledBox {
 
         //<> color gradiant
             for x in 0..100 {
-                let distance = (x as f32 - self.pos).abs();
+                // let distance = (x as f32 - self.pos).abs();
                 let max_pixel_disance = 1.0;
+                let mut pixel = [0,0,0];
 
-                let brightness = if distance > max_pixel_disance {
-                    0
-                } else {
-                    ((max_pixel_disance - (distance / max_pixel_disance)) * 255.0) as u8
-                };
+                //>  red target
+                    let brightness = brightness_from_distance_to(x as f32, target, max_pixel_disance);
+                    if brightness > 0{
+                        pixel = [brightness, 0, 0];
+                    }
+                    
 
-                print!("{}", "█".truecolor(brightness, brightness, brightness));
+                //<> white box
+                    if pixel == [0,0,0]{
+                        let brightness = brightness_from_distance_to(x as f32, self.pos, max_pixel_disance);
+                        if brightness > 0{
+                            pixel = [brightness, brightness, brightness];
+                        }
+                    }
+                    
+                //<
+
+                // print pixel
+                print!("{}", "█".truecolor(pixel[0], pixel[1], pixel[2]));
             }
         //<
 
@@ -151,7 +176,7 @@ impl ControlledBox {
     }
 
     fn add_force(&mut self, force: f32) {
-        let gravity = -0.01;
+        let gravity = -0.0;
         self.speed += force + gravity;
     }
 
@@ -175,26 +200,41 @@ fn main() {
     let mut pidc = PIDController::new();
     pidc.proportianal_gain = 0.001;
     pidc.derivative_gain = 1.0;
-    pidc.integral_gain = 0.0000005;
+    // pidc.integral_gain = 0.0000005;
     pidc.integration_saturation = 20000.0;
     pidc.output_max = f32::MAX;
-    pidc.output_min = 0.0;
+    pidc.output_min = f32::MIN;
 
-    // run sim
-    loop {
+    //> run sim
+        let mut rng = thread_rng();
+        let mut target: f32 = rng.gen_range(0.0..100.0);
+        let mut count = 0;
         let timestep = 20;
-        cbox.display_position();
-        let input = pidc.update(timestep as f32, cbox.pos, 50.0);
-        cbox.add_force(input);
-        cbox.update();
+        
+        loop {
 
-        //> sleep
-            let ten_millis = time::Duration::from_millis(timestep);
-            thread::sleep(ten_millis);
-        //<
-        print!("\r");
-    }
+            if count > 100 {
+                count = 0;
+                target = rng.gen_range(0.0..100.0);
+            }
+            
+            // let target = 50.0;
+            
+            cbox.display_position(target);
+            let input = pidc.update(timestep as f32, cbox.pos, target);
+            cbox.add_force(input );
+            cbox.update();
 
-    // let mut rng = thread_rng();
-    // let node_id = rng.gen_range(0..u128::MAX);
+            //> sleep
+                let ten_millis = time::Duration::from_millis(timestep);
+                thread::sleep(ten_millis);
+            //<
+            // print!("\r");
+            println!();
+            count += 1;
+        }
+    //<
+
+    
+    
 }
