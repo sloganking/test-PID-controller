@@ -110,6 +110,70 @@ impl PIDController {
     pub fn reset(&mut self) {
         self.derivative_initialized = false;
     }
+
+    fn update_angle(&mut self, dt: f32, current_angle: f32, target_angle: f32) -> f32 {
+        let error = angle_difference(target_angle, current_angle);
+
+        //> calculate p term
+            let p = self.proportianal_gain * error;
+
+        //<> calculate D term
+            // let error_rate_of_change = (error - self.error_last) / dt;
+            // self.error_last = error;
+
+            // let value_rate_of_change = (current_value - self.value_last) / dt;
+            // self.value_last = current_value;
+
+            let error_rate_of_change = angle_difference(error, self.error_last);
+            self.error_last = error;
+
+            let value_rate_of_change = angle_difference(current_angle, self.value_last);
+            self.value_last = current_angle;
+
+            let mut d = 0.0;
+            // skip calculating dterm if first itertion
+            if self.derivative_initialized {
+                // choose d term to use
+                let derivative_measure =
+                    if self.derivative_measurement == DerivativeMeasurement::Velocity {
+                        -value_rate_of_change
+                    } else {
+                        error_rate_of_change
+                    };
+
+                d = self.derivative_gain * derivative_measure;
+            } else {
+                self.derivative_initialized = true;
+            }
+
+        //<> calculate I term
+            self.integration_stored = self.integration_stored + (error * dt);
+
+            // limit integration_stored
+            if self.integration_stored > self.integration_saturation {
+                self.integration_stored = self.integration_saturation;
+            } else if self.integration_stored < -self.integration_saturation {
+                self.integration_stored = -self.integration_saturation;
+            }
+
+            let i = self.integral_gain * self.integration_stored;
+        //<
+
+        let mut result = p + i + d;
+
+        if result > self.output_max {
+            result = self.output_max;
+        } else if result < self.output_min {
+            result = self.output_min;
+        }
+
+        result
+    }
+}
+
+/// Gives distance bewteen two angles (in degrees) with an output range of [-180, 180]
+fn angle_difference(a: f32, b: f32) -> f32 {
+    (a - b + 540.0) % 360.0 - 180.0
 }
 
 struct ControlledBox {
@@ -162,6 +226,40 @@ impl ControlledBox {
         }
     }
 
+    fn display_angular_position(&self, target: f32) {
+        for x in 0..=PIXELS {
+            // let distance = (x as f32 - self.pos).abs();
+
+            //> convert from angular to linear
+                let transformed_pos = self.pos / 360.0 * PIXELS as f32;
+                let target = target / 360.0 * PIXELS as f32;
+            //<
+
+            let max_pixel_disance = 1.0;
+            let mut pixel = [0, 0, 0];
+
+            //>  red target
+                let brightness = brightness_from_distance_to(x as f32, target, max_pixel_disance);
+                if brightness > 0 {
+                    pixel = [brightness, 0, 0];
+                }
+
+            //<> white box
+                if pixel == [0, 0, 0] {
+                    let brightness =
+                        brightness_from_distance_to(x as f32, transformed_pos, max_pixel_disance);
+                    if brightness > 0 {
+                        pixel = [brightness, brightness, brightness];
+                    }
+                }
+
+            //<
+
+            // print pixel
+            print!("{}", "█".truecolor(pixel[0], pixel[1], pixel[2]));
+        }
+    }
+
     fn add_force(&mut self, force: f32) {
         let gravity = -0.0;
         self.speed += force + gravity;
@@ -176,6 +274,22 @@ impl ControlledBox {
             self.pos = PIXELS as f32;
         }
     }
+
+    fn update_angle(&mut self) {
+        self.pos += self.speed;
+
+        self.pos = self.pos % 360.0;
+
+        if self.pos < 0.0 {
+            self.pos = 360.0 - self.pos;
+        }
+
+        // if self.pos < 0.0 {
+        //     self.pos = 0.0;
+        // } else if self.pos > PIXELS as f32 {
+        //     self.pos = PIXELS as f32;
+        // }
+    }
 }
 
 fn main() {
@@ -183,38 +297,81 @@ fn main() {
         let mut cbox = ControlledBox::new();
         cbox.pos = 10.0;
 
-    //<> setup PIDController
-        let mut pidc = PIDController::new();
-        pidc.proportianal_gain = 0.001;
-        pidc.derivative_gain = 1.0;
-        // pidc.integral_gain = 0.0000005;
-        pidc.integration_saturation = 20000.0;
-        pidc.output_max = f32::MAX;
-        pidc.output_min = f32::MIN;
+    //<> run linear sim
 
-    //<> run sim
-        let mut rng = thread_rng();
-        let mut target: f32 = rng.gen_range(0.0..=PIXELS as f32);
-        let mut count = 0;
-        let timestep = 20;
+        // //> setup PIDController
+        //     let mut pidc = PIDController::new();
+        //     pidc.proportianal_gain = 0.001;
+        //     pidc.derivative_gain = 1.0;
+        //     // pidc.integral_gain = 0.0000005;
+        //     pidc.integration_saturation = 20000.0;
+        //     pidc.output_max = f32::MAX;
+        //     pidc.output_min = f32::MIN;
+        // //<
 
-        loop {
-            if count > PIXELS {
-                count = 0;
-                target = rng.gen_range(0.0..=PIXELS as f32);
+        // let mut rng = thread_rng();
+        // let mut target: f32 = rng.gen_range(0.0..=PIXELS as f32);
+        // let mut count = 0;
+        // let timestep = 20;
+
+        // loop {
+        //     if count > PIXELS {
+        //         count = 0;
+        //         target = rng.gen_range(0.0..=PIXELS as f32);
+        //     }
+
+        //     cbox.display_position(target);
+        //     let input = pidc.update(timestep as f32, cbox.pos, target);
+        //     cbox.add_force(input);
+        //     cbox.update();
+
+        //     //> sleep
+        //         let ten_millis = time::Duration::from_millis(timestep);
+        //         thread::sleep(ten_millis);
+        //     //<
+        //     println!();
+        //     count += 1;
+        // }
+
+    //<> run angular sim
+
+        //> setup PIDController
+            let mut pidc = PIDController::new();
+            pidc.proportianal_gain = 0.01;
+            pidc.derivative_gain = 0.5;
+            // pidc.integral_gain = 0.0000005;
+            pidc.integration_saturation = 20000.0;
+            pidc.output_max = f32::MAX;
+            pidc.output_min = f32::MIN;
+        //<
+
+        //> run sim
+            let mut rng = thread_rng();
+            let mut target: f32 = rng.gen_range(0.0..=360.0 as f32);
+            // let mut target: f32 = 20.0;
+            let mut count = 0;
+            let timestep = 20;
+
+            loop {
+                if count > PIXELS {
+                    count = 0;
+                    target = rng.gen_range(0.0..=360.0 as f32);
+                    // target = 340.0;
+                }
+
+                // println!("cbox.pos: {}", cbox.pos);
+                cbox.display_angular_position(target);
+                let input = pidc.update_angle(timestep as f32, cbox.pos, target);
+                cbox.add_force(input);
+                cbox.update_angle();
+
+                //> sleep
+                    let ten_millis = time::Duration::from_millis(timestep);
+                    thread::sleep(ten_millis);
+                //<
+                println!();
+                count += 1;
             }
-
-            cbox.display_position(target);
-            let input = pidc.update(timestep as f32, cbox.pos, target);
-            cbox.add_force(input);
-            cbox.update();
-
-            //> sleep
-                let ten_millis = time::Duration::from_millis(timestep);
-                thread::sleep(ten_millis);
-            //<
-            println!();
-            count += 1;
-        }
+        //<
     //<
 }
