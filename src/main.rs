@@ -39,7 +39,7 @@ impl PIDController {
             integral_gain: 0.0,
             derivative_gain: 0.0,
             integration_stored: 0.0,
-            integration_saturation: 0.0,
+            integration_saturation: f32::MAX,
 
             error_last: 0.0,
             value_last: 0.0,
@@ -294,22 +294,121 @@ impl ControlledBox {
     }
 }
 
+struct ControlledBox2d {
+    pub x_pos: f32,
+    x_speed: f32,
+    pub y_pos: f32,
+    y_speed: f32,
+    x_max: u32,
+    y_max: u32,
+}
+
+impl ControlledBox2d {
+    fn new(x_max: u32, y_max: u32) -> Self {
+        ControlledBox2d {
+            x_pos: x_max as f32 / 2.0,
+            x_speed: 0.0,
+            y_pos: 0.0,
+            y_speed: 0.0,
+            x_max,
+            y_max,
+        }
+    }
+
+    fn update(&mut self) {
+
+        // update position
+        self.x_pos += self.x_speed;
+        self.y_pos += self.y_speed;
+
+        // keep x_pos in bounds
+        if self.x_pos < 0.0 {
+            self.x_pos = 0.0;
+            self.x_speed = 0.0;
+        } else if self.x_pos > self.x_max as f32 {
+            self.x_pos = self.x_max as f32;
+            self.x_speed = 0.0;
+        }
+
+        // keep y_pos in bounds
+        if self.y_pos < 0.0 {
+            self.y_pos = 0.0;
+            self.y_speed = 0.0;
+        } else if self.y_pos > self.y_max as f32 {
+            self.y_pos = self.y_max as f32;
+            self.y_speed = 0.0;
+        }
+    }
+
+    fn add_force(&mut self, x_force: f32, y_force: f32){
+        self.x_speed += x_force;
+        self.y_speed += y_force;
+    }
+
+    fn display_scene(&self, target: (f32, f32)){
+
+        let max_pixel_distance = 1.0;
+
+        println!();
+        for y in (0..=self.y_max).rev(){
+            for x in 0..=self.x_max{
+
+                // set default color to black
+                let mut pixel = [20, 20, 20];
+
+                // render red target
+                    let distance = distance_2d(x as f32,y as f32, target.0, target.1);
+
+                    if distance <= max_pixel_distance{
+                        let brighness = ((max_pixel_distance - (distance / max_pixel_distance)) * 255.0) as u8; 
+                        pixel[0] = brighness;
+                    }
+
+                //> render white box
+                    let distance = distance_2d(x as f32,y as f32, self.x_pos, self.y_pos);
+
+                    if distance <= max_pixel_distance{
+                        let brighness = ((max_pixel_distance - (distance / max_pixel_distance)) * 255.0) as u8; 
+                        pixel = [brighness, brighness, brighness];
+                    }
+                //<
+
+                // print pixel
+                print!("{}", "█".truecolor(pixel[0], pixel[1], pixel[2]));
+
+            }
+            println!();
+        }
+    }
+}
+
+fn distance_2d(p1x: f32,p1y: f32, p2x: f32,p2y: f32) -> f32{
+
+    let x_distance = (p1x - p2x).abs();
+    let y_distance = (p1y - p2y).abs();
+
+    (x_distance.powf(2.0) + y_distance.powf(2.0)).sqrt()
+
+}
+
 enum Sim {
     _Linear,
     _Angular,
+    _2d
 }
 
 fn main() {
     // decind which program we're going to run
-    let sim = Sim::_Linear;
-
-    //> setup box
-        let mut cbox = ControlledBox::new();
-        cbox.pos = 10.0;
-    //<
+    let sim = Sim::_2d;
 
     match sim {
         Sim::_Linear => {
+
+            //> setup box
+                let mut cbox = ControlledBox::new();
+                cbox.pos = 10.0;
+            //<
+
             //> setup PIDController
                 let mut pidc = PIDController::new();
                 pidc.proportianal_gain = 0.001;
@@ -345,6 +444,12 @@ fn main() {
             }
         }
         Sim::_Angular => {
+
+            //> setup box
+                let mut cbox = ControlledBox::new();
+                cbox.pos = 10.0;
+            //<
+
             //> setup PIDController
                 let mut pidc = PIDController::new();
                 pidc.proportianal_gain = 0.01;
@@ -383,6 +488,64 @@ fn main() {
                     count += 1;
                 }
             //<
+        }
+        Sim::_2d => {
+
+            let mut cbox2d = ControlledBox2d::new(40,20);
+
+            cbox2d.x_pos = 20.0;
+
+            //> setup PIDController for x axis
+                let mut pid_x = PIDController::new();
+                pid_x.proportianal_gain = 0.01;
+                pid_x.derivative_gain = 10.0;
+                // pid_x.integral_gain = 0.0000005;
+                // pid_x.integration_saturation = 20000.0;
+                pid_x.output_max = f32::MAX;
+                pid_x.output_min = f32::MIN;
+
+            //<> setup PIDController for y axis
+                let mut pid_y = PIDController::new();
+                pid_y.proportianal_gain = 0.01;
+                pid_y.derivative_gain = 10.0;
+                pid_y.integral_gain = 0.0000025;
+                pid_y.integration_saturation = 15000.0;
+                pid_y.output_max = f32::MAX;
+                pid_y.output_min = f32::MIN;
+            //<
+
+            //=====================================
+
+            let mut rng = thread_rng();
+            let mut target = (rng.gen_range(0.0..=cbox2d.x_max as f32), rng.gen_range(0.0..=cbox2d.y_max as f32));
+            let mut target = (cbox2d.x_max as f32 / 2.0, cbox2d.y_max as f32 / 2.0);
+            let mut count = 0;
+            let timestep = 100;
+
+            loop {
+                if count > 50 {
+                    count = 0;
+                    target = (rng.gen_range(0.0..=cbox2d.x_max as f32), rng.gen_range(0.0..=cbox2d.y_max as f32));
+                }
+
+                //> Display scene
+                    cbox2d.display_scene(target);
+                //<> calculate and apply PID inputs
+                    let x_force = pid_x.update(timestep as f32, cbox2d.x_pos, target.0);
+                    let y_force = pid_y.update(timestep as f32, cbox2d.y_pos, target.1);
+                    cbox2d.add_force(x_force, y_force - 0.03);
+
+                //<> update scene physics
+                    cbox2d.update();
+
+                //> sleep
+                    let ten_millis = time::Duration::from_millis(timestep);
+                    thread::sleep(ten_millis);
+                //<
+                // println!();
+                count += 1;
+            }
+
         }
     }
 }
