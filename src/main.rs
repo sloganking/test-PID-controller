@@ -270,8 +270,10 @@ impl ControlledBox {
 
         if self.pos < 0.0 {
             self.pos = 0.0;
+            self.speed = 0.0;
         } else if self.pos > PIXELS as f32 {
             self.pos = PIXELS as f32;
+            self.speed = 0.0;
         }
     }
 
