@@ -4,6 +4,8 @@ use std::thread::{self};
 use colored::Colorize;
 use rand::{thread_rng, Rng};
 
+static PIXELS: i32 = 200;
+
 #[derive(PartialEq)]
 pub enum DerivativeMeasurement {
     Velocity,
@@ -134,7 +136,7 @@ impl ControlledBox {
     }
 
     fn display_position(&self, target: f32) {
-        for x in 0..=100 {
+        for x in 0..=PIXELS {
             // let distance = (x as f32 - self.pos).abs();
             let max_pixel_disance = 1.0;
             let mut pixel = [0, 0, 0];
@@ -170,8 +172,8 @@ impl ControlledBox {
 
         if self.pos < 0.0 {
             self.pos = 0.0;
-        } else if self.pos > 100.0 {
-            self.pos = 100.0;
+        } else if self.pos > PIXELS as f32 {
+            self.pos = PIXELS as f32;
         }
     }
 }
@@ -192,14 +194,14 @@ fn main() {
 
     //<> run sim
         let mut rng = thread_rng();
-        let mut target: f32 = rng.gen_range(0.0..100.0);
+        let mut target: f32 = rng.gen_range(0.0..=PIXELS as f32);
         let mut count = 0;
         let timestep = 20;
 
         loop {
-            if count > 100 {
+            if count > PIXELS {
                 count = 0;
-                target = rng.gen_range(0.0..100.0);
+                target = rng.gen_range(0.0..=PIXELS as f32);
             }
 
             cbox.display_position(target);
