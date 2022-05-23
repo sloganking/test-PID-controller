@@ -316,7 +316,6 @@ impl ControlledBox2d {
     }
 
     fn update(&mut self) {
-
         // update position
         self.x_pos += self.x_speed;
         self.y_pos += self.y_speed;
@@ -340,70 +339,75 @@ impl ControlledBox2d {
         }
     }
 
-    fn add_force(&mut self, x_force: f32, y_force: f32){
+    fn add_force(&mut self, x_force: f32, y_force: f32) {
         self.x_speed += x_force;
         self.y_speed += y_force;
     }
 
-    fn display_scene(&self, target: (f32, f32)){
-
+    fn display_scene(&self, target: (f32, f32)) {
         let max_pixel_distance = 1.0;
 
         println!();
-        for y in (0..=self.y_max).rev(){
-            for x in 0..=self.x_max{
-
+        for y in (0..=self.y_max).rev() {
+            for x in 0..=self.x_max {
                 // set default color to black
                 let mut pixel = [20, 20, 20];
 
                 // render red target
-                    let distance = distance_2d(x as f32,y as f32, target.0, target.1);
+                let distance = distance_2d(x as f32, y as f32, target.0, target.1);
 
-                    if distance <= max_pixel_distance{
-                        let brighness = ((max_pixel_distance - (distance / max_pixel_distance)) * 255.0) as u8; 
-                        pixel[0] = brighness;
-                    }
+                if distance <= max_pixel_distance {
+                    let brighness =
+                        ((max_pixel_distance - (distance / max_pixel_distance)) * 255.0) as u8;
+                    pixel[0] = brighness;
+                }
 
                 //> render white box
-                    let distance = distance_2d(x as f32,y as f32, self.x_pos, self.y_pos);
+                    let distance = distance_2d(x as f32, y as f32, self.x_pos, self.y_pos);
 
-                    if distance <= max_pixel_distance{
-                        let brighness = ((max_pixel_distance - (distance / max_pixel_distance)) * 255.0) as u8; 
+                    if distance <= max_pixel_distance {
+                        let brighness =
+                            ((max_pixel_distance - (distance / max_pixel_distance)) * 255.0) as u8;
                         pixel = [brighness, brighness, brighness];
                     }
                 //<
 
                 // print pixel
                 print!("{}", "█".truecolor(pixel[0], pixel[1], pixel[2]));
-
             }
             println!();
         }
     }
 }
 
-fn distance_2d(p1x: f32,p1y: f32, p2x: f32,p2y: f32) -> f32{
-
+fn distance_2d(p1x: f32, p1y: f32, p2x: f32, p2y: f32) -> f32 {
     let x_distance = (p1x - p2x).abs();
     let y_distance = (p1y - p2y).abs();
 
     (x_distance.powf(2.0) + y_distance.powf(2.0)).sqrt()
+}
 
+fn calc_2dforce_from_angle_and_power(angle: f32, power: f32) -> (f32, f32) {
+    // get coordinates from degrees via unit circle
+    let coordinates = (angle.to_radians().cos(), angle.to_radians().sin());
+
+    // multiply outputs by power
+    (coordinates.0 * power, coordinates.1 * power)
 }
 
 enum Sim {
     _Linear,
     _Angular,
-    _2d
+    _2d,
+    _2d_angular,
 }
 
 fn main() {
     // decind which program we're going to run
-    let sim = Sim::_2d;
+    let sim = Sim::_2d_angular;
 
     match sim {
         Sim::_Linear => {
-
             //> setup box
                 let mut cbox = ControlledBox::new();
                 cbox.pos = 10.0;
@@ -444,7 +448,6 @@ fn main() {
             }
         }
         Sim::_Angular => {
-
             //> setup box
                 let mut cbox = ControlledBox::new();
                 cbox.pos = 10.0;
@@ -490,8 +493,7 @@ fn main() {
             //<
         }
         Sim::_2d => {
-
-            let mut cbox2d = ControlledBox2d::new(40,20);
+            let mut cbox2d = ControlledBox2d::new(40, 20);
 
             cbox2d.x_pos = 20.0;
 
@@ -517,7 +519,6 @@ fn main() {
             //=====================================
 
             let mut rng = thread_rng();
-            let mut target = (rng.gen_range(0.0..=cbox2d.x_max as f32), rng.gen_range(0.0..=cbox2d.y_max as f32));
             let mut target = (cbox2d.x_max as f32 / 2.0, cbox2d.y_max as f32 / 2.0);
             let mut count = 0;
             let timestep = 100;
@@ -525,7 +526,10 @@ fn main() {
             loop {
                 if count > 50 {
                     count = 0;
-                    target = (rng.gen_range(0.0..=cbox2d.x_max as f32), rng.gen_range(0.0..=cbox2d.y_max as f32));
+                    target = (
+                        rng.gen_range(0.0..=cbox2d.x_max as f32),
+                        rng.gen_range(0.0..=cbox2d.y_max as f32),
+                    );
                 }
 
                 //> Display scene
@@ -538,14 +542,78 @@ fn main() {
                 //<> update scene physics
                     cbox2d.update();
 
-                //> sleep
+                //<> sleep
                     let ten_millis = time::Duration::from_millis(timestep);
                     thread::sleep(ten_millis);
                 //<
                 // println!();
                 count += 1;
             }
+        }
+        Sim::_2d_angular => {
+            let mut cbox2d = ControlledBox2d::new(40, 20);
+            cbox2d.x_pos = 20.0;
 
+            //> setup PIDController for angle of rotation
+                let mut pid_angle = PIDController::new();
+                pid_angle.proportianal_gain = 2.0;
+                pid_angle.derivative_gain = 9000.0;
+                pid_angle.integral_gain = 0.0000005;
+                pid_angle.integration_saturation = 20000.0;
+                pid_angle.output_max = 20.0;
+                pid_angle.output_min = -20.0;
+
+            //<> setup PIDController for power
+                let mut pid_power = PIDController::new();
+                pid_power.proportianal_gain = 0.01;
+                pid_power.derivative_gain = 10.0;
+                pid_power.integral_gain = 0.0000025;
+                pid_power.integration_saturation = 15000.0;
+                pid_power.output_max = f32::MAX;
+                pid_power.output_min = f32::MIN;
+            //<
+
+            let mut rng = thread_rng();
+            let mut target = (cbox2d.x_max as f32 / 2.0, cbox2d.y_max as f32 / 2.0);
+            target = (
+                rng.gen_range(0.0..=cbox2d.x_max as f32),
+                rng.gen_range(0.0..=cbox2d.y_max as f32),
+            );
+            let mut count = 0;
+            let timestep = 100;
+
+            loop {
+                if count > 200 {
+                    count = 0;
+                    target = (
+                        rng.gen_range(0.0..=cbox2d.x_max as f32),
+                        rng.gen_range(0.0..=cbox2d.y_max as f32),
+                    );
+                }
+
+                //> Display scene
+                    cbox2d.display_scene(target);
+                //<> calculate and apply PID inputs
+                    let angle = pid_angle.update(timestep as f32, cbox2d.x_pos, target.0);
+                    let power = pid_power.update(timestep as f32, cbox2d.y_pos, target.1);
+
+                    println!("angle: {}", angle);
+                    println!("power: {}", power);
+
+                    let force_2d = calc_2dforce_from_angle_and_power(-angle + 90.0, power);
+                    let gravity = 0.03;
+                    cbox2d.add_force(force_2d.0, force_2d.1 - gravity);
+
+                //<> update scene physics
+                    cbox2d.update();
+
+                //<> sleep
+                    let ten_millis = time::Duration::from_millis(timestep);
+                    thread::sleep(ten_millis);
+                //<
+                // println!();
+                count += 1;
+            }
         }
     }
 }
