@@ -85,22 +85,17 @@ impl PIDController {
             self.integration_stored += error * dt;
 
             // limit integration_stored
-            if self.integration_stored > self.integration_saturation {
-                self.integration_stored = self.integration_saturation;
-            } else if self.integration_stored < -self.integration_saturation {
-                self.integration_stored = -self.integration_saturation;
-            }
+            self.integration_stored = self
+                .integration_stored
+                .clamp(0.0, self.integration_saturation);
 
             let i = self.integral_gain * self.integration_stored;
         //<
 
         let mut result = p + i + d;
 
-        if result > self.output_max {
-            result = self.output_max;
-        } else if result < self.output_min {
-            result = self.output_min;
-        }
+        // limit result
+        result = result.clamp(self.output_min, self.output_max);
 
         result
     }
@@ -150,22 +145,17 @@ impl PIDController {
             self.integration_stored += error * dt;
 
             // limit integration_stored
-            if self.integration_stored > self.integration_saturation {
-                self.integration_stored = self.integration_saturation;
-            } else if self.integration_stored < -self.integration_saturation {
-                self.integration_stored = -self.integration_saturation;
-            }
+            self.integration_stored = self
+                .integration_stored
+                .clamp(-self.integration_saturation, self.integration_saturation);
 
             let i = self.integral_gain * self.integration_stored;
         //<
 
         let mut result = p + i + d;
 
-        if result > self.output_max {
-            result = self.output_max;
-        } else if result < self.output_min {
-            result = self.output_min;
-        }
+        // limit result
+        result = result.clamp(self.output_min, self.output_max);
 
         result
     }
@@ -285,12 +275,6 @@ impl ControlledBox {
         if self.pos < 0.0 {
             self.pos = 360.0 - self.pos;
         }
-
-        // if self.pos < 0.0 {
-        //     self.pos = 0.0;
-        // } else if self.pos > PIXELS as f32 {
-        //     self.pos = PIXELS as f32;
-        // }
     }
 }
 
@@ -353,16 +337,16 @@ impl ControlledBox2d {
                 // set default color to black
                 let mut pixel = [20, 20, 20];
 
-                // render red target
-                let distance = distance_2d(x as f32, y as f32, target.0, target.1);
+                //> render red target
+                    let distance = distance_2d(x as f32, y as f32, target.0, target.1);
 
-                if distance <= max_pixel_distance {
-                    let brighness =
-                        ((max_pixel_distance - (distance / max_pixel_distance)) * 255.0) as u8;
-                    pixel[0] = brighness;
-                }
+                    if distance <= max_pixel_distance {
+                        let brighness =
+                            ((max_pixel_distance - (distance / max_pixel_distance)) * 255.0) as u8;
+                        pixel[0] = brighness;
+                    }
 
-                //> render white box
+                //<> render white box
                     let distance = distance_2d(x as f32, y as f32, self.x_pos, self.y_pos);
 
                     if distance <= max_pixel_distance {
@@ -399,12 +383,12 @@ enum Sim {
     _Linear,
     _Angular,
     _2d,
-    _2d_angular,
+    _2dAngular,
 }
 
 fn main() {
     // decind which program we're going to run
-    let sim = Sim::_2d_angular;
+    let sim = Sim::_2dAngular;
 
     match sim {
         Sim::_Linear => {
@@ -550,7 +534,7 @@ fn main() {
                 count += 1;
             }
         }
-        Sim::_2d_angular => {
+        Sim::_2dAngular => {
             let mut cbox2d = ControlledBox2d::new(40, 20);
             cbox2d.x_pos = 20.0;
 
@@ -574,8 +558,7 @@ fn main() {
             //<
 
             let mut rng = thread_rng();
-            let mut target = (cbox2d.x_max as f32 / 2.0, cbox2d.y_max as f32 / 2.0);
-            target = (
+            let mut target = (
                 rng.gen_range(0.0..=cbox2d.x_max as f32),
                 rng.gen_range(0.0..=cbox2d.y_max as f32),
             );
