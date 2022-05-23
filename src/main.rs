@@ -560,8 +560,8 @@ fn main() {
                 pid_angle.derivative_gain = 9000.0;
                 pid_angle.integral_gain = 0.0000005;
                 pid_angle.integration_saturation = 20000.0;
-                pid_angle.output_max = 20.0;
-                pid_angle.output_min = -20.0;
+                pid_angle.output_max = 30.0;
+                pid_angle.output_min = -30.0;
 
             //<> setup PIDController for power
                 let mut pid_power = PIDController::new();
@@ -570,7 +570,7 @@ fn main() {
                 pid_power.integral_gain = 0.0000025;
                 pid_power.integration_saturation = 15000.0;
                 pid_power.output_max = f32::MAX;
-                pid_power.output_min = f32::MIN;
+                pid_power.output_min = 0.0;
             //<
 
             let mut rng = thread_rng();
@@ -580,7 +580,7 @@ fn main() {
                 rng.gen_range(0.0..=cbox2d.y_max as f32),
             );
             let mut count = 0;
-            let timestep = 100;
+            let timestep = 80;
 
             loop {
                 if count > 200 {
