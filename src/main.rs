@@ -19,6 +19,7 @@ pub struct PIDController {
 
     pub integration_stored: f32,
     pub integration_saturation: f32,
+    pub integration_value_change_limit: f32,
 
     pub error_last: f32,
     pub value_last: f32,
@@ -40,6 +41,7 @@ impl PIDController {
             derivative_gain: 0.0,
             integration_stored: 0.0,
             integration_saturation: f32::MAX,
+            integration_value_change_limit: f32::MAX,
 
             error_last: 0.0,
             value_last: 0.0,
@@ -82,7 +84,25 @@ impl PIDController {
             }
 
         //<> calculate I term
-            self.integration_stored += error * dt;
+
+            let err_dt = error * dt;
+
+            // positive (value_rate_of_change) means moving up
+
+            // (err_dt < 0.0) am above target
+            // (value_rate_of_change < self.integration_value_change_limit) am moving down
+            // if i'm above target and not moving down faster than -self.integration_value_change_limit
+            if err_dt < 0.0 && value_rate_of_change > -self.integration_value_change_limit {
+                self.integration_stored += err_dt;
+            // (err_dt > 0.0) am under target
+            // (value_rate_of_change > -self.integration_value_change_limit) am moving up
+            // if I'm below target and not moving up faster than self.integration_value_change_limit
+            } else if err_dt > 0.0 && value_rate_of_change < self.integration_value_change_limit {
+                self.integration_stored += err_dt;
+            }
+
+
+            
 
             // limit integration_stored
             self.integration_stored = self
@@ -550,11 +570,12 @@ fn main() {
             //<> setup PIDController for power
                 let mut pid_power = PIDController::new();
                 pid_power.proportianal_gain = 0.01;
-                pid_power.derivative_gain = 10.0;
+                pid_power.derivative_gain = 20.0;
                 pid_power.integral_gain = 0.0000025;
                 pid_power.integration_saturation = 15000.0;
                 pid_power.output_max = f32::MAX;
                 pid_power.output_min = 0.0;
+                pid_power.integration_value_change_limit = 0.001;
             //<
 
             let mut rng = thread_rng();
@@ -582,6 +603,7 @@ fn main() {
 
                     println!("angle: {}", angle);
                     println!("power: {}", power);
+                    println!("pid_power.integration_stored: {}", pid_power.integration_stored);
 
                     let force_2d = calc_2dforce_from_angle_and_power(-angle + 90.0, power);
                     let gravity = 0.03;
