@@ -575,7 +575,8 @@ fn main() {
                 pid_power.integration_saturation = 15000.0;
                 pid_power.output_max = f32::MAX;
                 pid_power.output_min = 0.0;
-                pid_power.integration_value_change_limit = 0.001;
+                pid_power.integration_value_change_limit = 0.0005;
+                pid_power.integration_stored = 11000.0;
             //<
 
             let mut rng = thread_rng();
