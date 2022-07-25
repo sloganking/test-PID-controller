@@ -357,7 +357,7 @@ impl ControlledBox2d {
                 //<
 
                 // print pixel
-                print!("{}", "█".truecolor(pixel[0], pixel[1], pixel[2]));
+                print!("{}", "██".truecolor(pixel[0], pixel[1], pixel[2]));
             }
             println!();
         }
@@ -535,7 +535,7 @@ fn main() {
             }
         }
         Sim::_2dAngular => {
-            let mut cbox2d = ControlledBox2d::new(40, 20);
+            let mut cbox2d = ControlledBox2d::new(40, 40);
             cbox2d.x_pos = 20.0;
 
             //> setup PIDController for angle of rotation
